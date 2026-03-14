@@ -1,5 +1,5 @@
 const { Client, GatewayIntentBits } = require('@jubbio/core');
-const { joinVoiceChannel, createAudioPlayer, createAudioResource } = require('@jubbio/voice');
+const { joinVoiceChannel, createAudioPlayer, createAudioResource, getVoiceConnection } = require('@jubbio/voice');
 
 const client = new Client({
   intents: [
@@ -7,12 +7,13 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildVoiceStates,
-    GatewayIntentBits.GuildMembers
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.DirectMessages
   ]
 });
 
-// TOKEN BURADA - DIREKT GÖMÜLÜ
-const BOT_TOKEN = 'c8cdb437d9bff10e41c5cebd4600473ced13285936de75ec6ab4397c50613cc0';
+// TOKEN - Render'da environment variable'dan al
+const BOT_TOKEN = process.env.BOT_TOKEN;
 
 let player = createAudioPlayer();
 let connection = null;
@@ -26,23 +27,28 @@ client.on('ready', () => {
 
 // MESAJ KOMUTLARI
 client.on('messageCreate', async (message) => {
+  // Bot kendi mesajına cevap vermesin
   if (message.author.bot) return;
+  
+  // Sadece ! ile başlayan mesajları işle
   if (!message.content.startsWith('!')) return;
 
   const args = message.content.slice(1).split(' ');
   const command = args[0].toLowerCase();
 
-  // !katil - Ses kanalına katıl
+  // !katil - Ses kanalına katıl (DÜZELTİLMİŞ)
   if (command === 'katil') {
     try {
+      // Guild kontrolü - özel mesajda çalışmasın
       if (!message.guild) {
         return message.reply('❌ Bu komut sadece sunucularda kullanılabilir!');
       }
 
-      const member = await message.guild.members.fetch(message.author.id);
+      // Üyeyi fetch et
+      const member = await message.guild.members.fetch(message.author.id).catch(() => null);
       
       if (!member) {
-        return message.reply('❌ Üye bilgisi alınamadı!');
+        return message.reply('❌ Sunucuda üye olarak bulunamadın!');
       }
 
       const voiceChannel = member.voice.channel;
@@ -51,6 +57,13 @@ client.on('messageCreate', async (message) => {
         return message.reply('❌ Önce bir ses kanalına girmelisin!');
       }
 
+      // Varsa eski bağlantıyı temizle
+      const oldConnection = getVoiceConnection(message.guild.id);
+      if (oldConnection) {
+        oldConnection.destroy();
+      }
+
+      // Yeni bağlantı oluştur
       connection = joinVoiceChannel({
         channelId: voiceChannel.id,
         guildId: message.guild.id,
@@ -69,67 +82,100 @@ client.on('messageCreate', async (message) => {
 
   // !cal - Müzik çal
   else if (command === 'cal') {
-    if (!connection) {
-      return message.reply('❌ Önce !katil yazıp beni kanala çağır!');
-    }
-
-    const url = args[1];
-    if (!url) {
-      return message.reply('❌ Lütfen bir YouTube URL\'si ver! Örnek: !cal https://youtu.be/...');
-    }
-
-    queue.push(url);
-    
-    if (queue.length === 1) {
-      await message.reply('🎵 Müzik yükleniyor...');
-      try {
-        const resource = createAudioResource(url);
-        player.play(resource);
-        connection.subscribe(player);
-        await message.reply('🎵 Müzik çalıyor!');
-      } catch (error) {
-        await message.reply('❌ Müzik çalınamadı: ' + error.message);
-        queue.shift();
+    try {
+      // Guild kontrolü
+      if (!message.guild) {
+        return message.reply('❌ Bu komut sadece sunucularda kullanılabilir!');
       }
-    } else {
-      await message.reply(`🎵 Şarkı kuyruğa eklendi! Kuyrukta ${queue.length} şarkı var.`);
+
+      // Bağlantı kontrolü
+      if (!connection) {
+        return message.reply('❌ Önce !katil yazıp beni kanala çağır!');
+      }
+
+      const url = args[1];
+      if (!url) {
+        return message.reply('❌ Lütfen bir YouTube URL\'si ver! Örnek: !cal https://youtu.be/...');
+      }
+
+      // URL'yi kuyruğa ekle
+      queue.push(url);
+      
+      // Eğer çalan müzik yoksa hemen başlat
+      if (queue.length === 1) {
+        await message.reply('🎵 Müzik yükleniyor...');
+        
+        try {
+          const resource = createAudioResource(url);
+          player.play(resource);
+          connection.subscribe(player);
+          await message.reply('🎵 Müzik çalıyor!');
+        } catch (error) {
+          await message.reply('❌ Müzik çalınamadı: ' + error.message);
+          queue.shift(); // Hata olursa kuyruktan çıkar
+        }
+      } else {
+        await message.reply(`🎵 Şarkı kuyruğa eklendi! Kuyrukta ${queue.length} şarkı var.`);
+      }
+    } catch (error) {
+      console.error('❌ Çalma hatası:', error);
+      await message.reply('❌ Bir hata oluştu: ' + error.message);
     }
   }
 
   // !dur - Müziği durdur
   else if (command === 'dur') {
-    player.stop();
-    queue = [];
-    await message.reply('⏹️ Müzik durduruldu ve kuyruk temizlendi!');
+    try {
+      if (!connection) {
+        return message.reply('❌ Zaten kanalda değilim!');
+      }
+      
+      player.stop();
+      queue = [];
+      await message.reply('⏹️ Müzik durduruldu ve kuyruk temizlendi!');
+    } catch (error) {
+      await message.reply('❌ Hata: ' + error.message);
+    }
   }
 
   // !gec - Sonraki şarkıya geç
   else if (command === 'gec') {
-    if (queue.length <= 1) {
-      queue = [];
-      player.stop();
-      return message.reply('⏹️ Kuyrukta başka şarkı yok, müzik durduruldu.');
-    }
-    
-    queue.shift();
-    const nextUrl = queue[0];
     try {
+      if (!connection) {
+        return message.reply('❌ Kanalda değilim!');
+      }
+      
+      if (queue.length <= 1) {
+        queue = [];
+        player.stop();
+        return message.reply('⏹️ Kuyrukta başka şarkı yok, müzik durduruldu.');
+      }
+      
+      // İlk şarkıyı çıkar
+      queue.shift();
+      const nextUrl = queue[0];
+      
       const resource = createAudioResource(nextUrl);
       player.play(resource);
       await message.reply('⏭️ Sonraki şarkıya geçildi!');
     } catch (error) {
-      await message.reply('❌ Sonraki şarkı çalınamadı: ' + error.message);
+      await message.reply('❌ Geçiş hatası: ' + error.message);
     }
   }
 
   // !sira - Kuyruğu göster
   else if (command === 'sira') {
-    if (queue.length === 0) return message.reply('📭 Kuyruk boş!');
+    if (queue.length === 0) {
+      return message.reply('📭 Kuyruk boş!');
+    }
     
     let siraList = '';
     queue.forEach((url, index) => {
-      siraList += `${index + 1}. ${url.substring(0, 30)}...\n`;
+      // URL'yi kısalt göster
+      const shortUrl = url.length > 30 ? url.substring(0, 30) + '...' : url;
+      siraList += `${index + 1}. ${shortUrl}\n`;
     });
+    
     await message.reply(`📋 **Kuyruktaki şarkılar (${queue.length}):**\n${siraList}`);
   }
 
@@ -147,4 +193,12 @@ client.on('messageCreate', async (message) => {
   }
 });
 
-client.login(BOT_TOKEN);
+// Botu başlat
+if (!BOT_TOKEN) {
+  console.error('❌ BOT_TOKEN bulunamadı! Render environment variables kontrol et.');
+  process.exit(1);
+}
+
+client.login(BOT_TOKEN).catch(err => {
+  console.error('❌ Login hatası:', err.message);
+});
