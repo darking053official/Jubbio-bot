@@ -1,3 +1,5 @@
+const config = require('../config');
+
 module.exports = {
   name: 'queue',
   description: 'Kuyruktaki şarkıları gösterir',
@@ -8,12 +10,11 @@ module.exports = {
     const serverQueue = client.queue?.get(message.guild.id);
     
     if (!serverQueue || serverQueue.songs.length === 0) {
-      return message.reply('📭 **Kuyruk boş!**');
+      return message.reply(config.messages.queueEmpty);
     }
 
     let queueList = '🎵 **Kuyruktaki şarkılar:**\n\n';
     
-    // En fazla 10 şarkı göster
     const maxShow = Math.min(serverQueue.songs.length, 10);
     
     for (let i = 0; i < maxShow; i++) {
@@ -27,7 +28,6 @@ module.exports = {
       }
     }
     
-    // Kalan şarkı sayısını göster
     if (serverQueue.songs.length > 10) {
       queueList += `\n...ve **${serverQueue.songs.length - 10} şarkı** daha.`;
     }
