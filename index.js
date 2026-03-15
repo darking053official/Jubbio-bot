@@ -45,6 +45,7 @@ client.on('ready', () => {
   console.log(`📢 Bot adı: ${client.user?.username}`);
   console.log(`📢 Bot ID: ${client.user?.id}`);
   console.log(`📢 Komut sayısı: ${client.commands.size}`);
+  console.log(`📢 Prefix: ${config.prefix}`);
   console.log('=================================');
 });
 
@@ -68,7 +69,7 @@ client.on('messageCreate', async (message) => {
 
   const now = Date.now();
   const timestamps = client.cooldowns.get(command.name);
-  const cooldownAmount = (command.cooldown || 3) * 1000;
+  const cooldownAmount = (command.cooldown || config.advanced?.commandCooldown || 3) * 1000;
 
   if (timestamps.has(message.author.id)) {
     const expirationTime = timestamps.get(message.author.id) + cooldownAmount;
@@ -85,7 +86,7 @@ client.on('messageCreate', async (message) => {
     setTimeout(() => timestamps.delete(message.author.id), cooldownAmount);
   } catch (error) {
     console.error(`❌ ${command.name} hatası:`, error);
-    message.reply(config.messages.commandError).catch(() => {});
+    message.reply(config.messages?.commandError || '❌ **Komut çalıştırılırken hata oluştu!**').catch(() => {});
   }
 });
 
