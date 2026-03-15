@@ -1,10 +1,9 @@
-# Node.js bağımlılıkları
+# Node.js
 node_modules/
+package-lock.json
 npm-debug.log
 yarn-debug.log
 yarn-error.log
-package-lock.json
-yarn.lock
 
 # Ortam değişkenleri
 .env
@@ -12,37 +11,24 @@ yarn.lock
 .env.production
 .env.development
 
-# İşletim sistemi dosyaları
+# İşletim sistemi
 .DS_Store
 Thumbs.db
 desktop.ini
 
-# Log dosyaları
+# Loglar
 *.log
 logs/
-*.log.*
 
-# Editor dosyaları
+# Editor
 .vscode/
 .idea/
 *.sublime-*
 
-# Geçici dosyalar
+# Geçici
 tmp/
 temp/
 *.tmp
 
-# Render ve deploy
-render.yaml
-Dockerfile
-.dockerignore
-
-# Bot verileri (eğer database kullanırsan)
-*.db
-*.sqlite
-database.json
-config.local.js
-
-# GitHub'dan hariç tut ama klasör yapısını koru
-commands/
-!commands/*.js
+# Config (eğer token içeriyorsa)
+# config.js
