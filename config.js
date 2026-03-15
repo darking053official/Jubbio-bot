@@ -7,34 +7,44 @@ module.exports = {
   djRole: {
     enabled: true,
     roleName: 'DJ',
-    requiredFor: ['skip', 'stop', 'pause', 'queue']
+    requiredFor: ['skip', 'stop', 'pause', 'queue'],
+    adminBypass: true
   },
   
   voice: {
     selfDeaf: false,
     selfMute: false,
     leaveOnEmpty: true,
-    leaveOnStop: true
+    leaveOnStop: true,
+    leaveOnFinish: false
   },
   
   messages: {
     notInVoiceChannel: '❌ **Önce bir ses kanalına girmelisin!**',
-    noPermission: '❌ **Bu komutu kullanma iznin yok!**',
     noMusicPlaying: '❌ **Şu an müzik çalmıyor!**',
-    alreadyInVoice: '✅ **Zaten ses kanalındayım!**',
+    queueEmpty: '📭 **Kuyruk boş!**',
+    needDjRole: '❌ **Bu komut için DJ rolü gerekiyor!**',
     joinedVoice: '✅ **Ses kanalına katıldım!**',
     leftVoice: '👋 **Kanal terk edildi!**',
-    queueEmpty: '📭 **Kuyruk boş!**',
     addedToQueue: '🎵 **Şarkı kuyruğa eklendi!**',
     nowPlaying: '▶️ **Şimdi çalıyor:**',
     paused: '⏸️ **Müzik duraklatıldı!**',
     resumed: '▶️ **Müzik devam ediyor!**',
     stopped: '⏹️ **Müzik durduruldu!**',
     skipped: '⏭️ **Sonraki şarkıya geçildi!**',
-    volumeSet: '🔊 **Ses seviyesi ayarlandı:**',
     djRoleSet: '✅ **DJ rolü ayarlandı:**',
     djRoleRemoved: '✅ **DJ rolü kaldırıldı!**',
-    needDjRole: '❌ **Bu komut için DJ rolü gerekiyor!**',
     commandError: '❌ **Komut çalıştırılırken hata oluştu!**'
+  },
+  
+  emojis: {
+    play: '▶️',
+    pause: '⏸️',
+    stop: '⏹️',
+    skip: '⏭️',
+    queue: '📋',
+    music: '🎵',
+    error: '❌',
+    success: '✅'
   }
 };
