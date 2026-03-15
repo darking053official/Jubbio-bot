@@ -1,3 +1,5 @@
+const config = require('../config');
+
 module.exports = {
   name: 'resume',
   description: 'Duraklatılmış müziği devam ettirir',
@@ -7,15 +9,15 @@ module.exports = {
   async execute(message, args, client) {
     const voiceChannel = message.member?.voice?.channel;
     if (!voiceChannel) {
-      return message.reply('❌ **Önce bir ses kanalına girmelisin!**');
+      return message.reply(config.messages.notInVoiceChannel);
     }
 
     const serverQueue = client.queue?.get(message.guild.id);
     if (!serverQueue || serverQueue.songs.length === 0) {
-      return message.reply('❌ **Çalan müzik yok!**');
+      return message.reply(config.messages.noMusicPlaying);
     }
 
     serverQueue.player.unpause();
-    return message.reply('▶️ **Müzik devam ediyor!**');
+    return message.reply(config.messages.resumed);
   }
 };
