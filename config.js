@@ -1,5 +1,5 @@
 module.exports = {
-  token: process.env.BOT_TOKEN || 'c8cdb437d9bff10e41c5cebd4600473ced13285936de75ec6ab4397c50613cc0',
+  token: process.env.BOT_TOKEN || '9ad08124af59f0853aeda02a62ac722c26c43d7578e0981d8927d3b9e26ad900',
   prefix: '!',
   defaultVolume: 50,
   maxQueueSize: 100,
