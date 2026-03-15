@@ -1,5 +1,5 @@
 {
-  "name": "jubbio-bot",
+  "name": "jubbio-muzik-botu",
   "version": "1.0.0",
   "description": "Jubbio için müzik botu",
   "main": "index.js",
@@ -7,7 +7,7 @@
     "start": "node index.js"
   },
   "type": "module",
-  "author": "darking053official",
+  "author": "Darking053official",
   "license": "MIT",
   "engines": {
     "node": ">=16.0.0"
