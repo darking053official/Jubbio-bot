@@ -1,7 +1,26 @@
 const { Client, GatewayIntentBits, Collection } = require('@jubbio/core');
 const fs = require('fs');
 const path = require('path');
-const config = require('./config');
+
+// CONFIG DOSYASINI YÜKLE
+let config;
+try {
+  config = require('./config');
+  console.log('✅ config.js yüklendi');
+} catch (error) {
+  console.error('❌ config.js bulunamadı! Varsayılan ayarlar kullanılacak.');
+  config = {
+    token: process.env.BOT_TOKEN || '',
+    prefix: '!',
+    defaultVolume: 50,
+    maxQueueSize: 100,
+    messages: {
+      notInVoiceChannel: '❌ **Önce bir ses kanalına girmelisin!**',
+      noMusicPlaying: '❌ **Şu an müzik çalmıyor!**',
+      commandError: '❌ **Komut çalıştırılırken hata oluştu!**'
+    }
+  };
+}
 
 const client = new Client({
   intents: [
@@ -23,7 +42,6 @@ const commandsPath = path.join(__dirname, 'src', 'commands');
 console.log(`📁 Komutlar yükleniyor: ${commandsPath}`);
 
 try {
-  // Klasör var mı kontrol et
   if (!fs.existsSync(commandsPath)) {
     console.error('❌ src/commands klasörü bulunamadı!');
     process.exit(1);
@@ -65,23 +83,18 @@ client.on('ready', () => {
   console.log(`📢 Bot adı: ${client.user?.username}`);
   console.log(`📢 Bot ID: ${client.user?.id}`);
   console.log(`📢 Komut sayısı: ${client.commands.size}`);
-  console.log(`📢 Prefix: ${config.prefix}`);
+  console.log(`📢 Prefix: ${config.prefix || '!'}`);
   console.log('=================================');
 });
 
 // Mesajları dinle
 client.on('messageCreate', async (message) => {
-  // Bot kendi mesajlarını yoksay
   if (message.author.bot) return;
-  
-  // Prefix kontrolü
-  if (!message.content.startsWith(config.prefix)) return;
+  if (!message.content.startsWith(config.prefix || '!')) return;
 
-  // Argümanları ayır
-  const args = message.content.slice(config.prefix.length).trim().split(/ +/);
+  const args = message.content.slice((config.prefix || '!').length).trim().split(/ +/);
   const commandName = args.shift().toLowerCase();
 
-  // Komutu bul (isim veya alias ile)
   const command = client.commands.get(commandName) || 
                   client.commands.find(cmd => cmd.aliases && cmd.aliases.includes(commandName));
 
@@ -94,7 +107,7 @@ client.on('messageCreate', async (message) => {
 
   const now = Date.now();
   const timestamps = client.cooldowns.get(command.name);
-  const cooldownAmount = (command.cooldown || config.advanced?.commandCooldown || 3) * 1000;
+  const cooldownAmount = (command.cooldown || 3) * 1000;
 
   if (timestamps.has(message.author.id)) {
     const expirationTime = timestamps.get(message.author.id) + cooldownAmount;
@@ -109,26 +122,25 @@ client.on('messageCreate', async (message) => {
     console.log(`🎵 Komut çalıştırılıyor: ${command.name} - ${message.author.username}`);
     await command.execute(message, args, client);
     
-    // Cooldown'u kaydet
     timestamps.set(message.author.id, now);
     setTimeout(() => timestamps.delete(message.author.id), cooldownAmount);
     
   } catch (error) {
     console.error(`❌ ${command.name} komutu hatası:`, error);
-    
-    // Hata mesajı gönder
     const errorMsg = config.messages?.commandError || '❌ **Komut çalıştırılırken hata oluştu!**';
     await message.reply(errorMsg).catch(() => {});
   }
 });
 
-// Botu başlat
-if (!config.token) {
-  console.error('❌ config.js içinde token bulunamadı!');
+// Token kontrolü
+const token = config.token || process.env.BOT_TOKEN;
+if (!token) {
+  console.error('❌ Token bulunamadı! config.js veya process.env.BOT_TOKEN kontrol et!');
   process.exit(1);
 }
 
-client.login(config.token).then(() => {
+// Botu başlat
+client.login(token).then(() => {
   console.log('🔌 Bot başlatılıyor...');
 }).catch(err => {
   console.error('❌ Bot başlatılamadı:', err.message);
@@ -144,17 +156,11 @@ process.on('unhandledRejection', (error) => {
   console.error('❌ Promise hatası:', error);
 });
 
-// Çıkış temizliği
 process.on('SIGINT', () => {
   console.log('\n👋 Bot kapatılıyor...');
-  
-  // Tüm bağlantıları kapat
-  client.queue?.forEach((queue, guildId) => {
-    if (queue.connection) {
-      queue.connection.destroy();
-    }
+  client.queue?.forEach((queue) => {
+    if (queue.connection) queue.connection.destroy();
   });
-  
   client.destroy();
   process.exit(0);
 });
