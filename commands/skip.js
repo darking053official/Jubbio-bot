@@ -1,11 +1,19 @@
-export default {
-  name: "skip",
-  permissions: ["ManageChannels"],
+module.exports = {
+  name: 'skip',
+  description: 'Sonraki şarkıya geçer',
+  cooldown: 3,
+  async execute(message, args, client) {
+    const voiceChannel = message.member?.voice?.channel;
+    if (!voiceChannel) {
+      return message.reply('❌ Önce ses kanalına gir!');
+    }
 
-  async execute(ctx){
-    const dj = ctx.guildSettings.djRole
-    if(dj && !ctx.member.roles.includes(dj)) return ctx.reply("❌ Sadece DJ skip yapabilir")
-    ctx.guildSettings.skip = true
-    ctx.reply("⏭ Şarkı atlandı")
+    const serverQueue = client.queue.get(message.guild.id);
+    if (!serverQueue) {
+      return message.reply('❌ Çalan müzik yok!');
+    }
+
+    serverQueue.player.stop();
+    await message.reply('⏭️ **Sonraki şarkıya geçiliyor...**');
   }
-}
+};
