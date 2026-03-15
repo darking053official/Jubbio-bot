@@ -1,25 +1,28 @@
 const { Client, GatewayIntentBits } = require('@jubbio/core');
+const config = require('./config'); // config.js'i yükle
 
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildVoiceStates
   ]
 });
 
-const BOT_TOKEN = process.env.BOT_TOKEN || 'c8cdb437d9bff10e41c5cebd4600473ced13285936de75ec6ab4397c50613cc0';
-
 client.on('ready', () => {
-  console.log('✅ BOT ÇALIŞIYOR!');
+  console.log(`✅ Bot çalışıyor!`);
+  console.log(`📢 Prefix: ${config.prefix}`);
 });
 
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
-  
-  if (message.content === '!ping') {
-    await message.reply('🏓 PONG!');
-  }
+  if (!message.content.startsWith(config.prefix)) return;
+
+  const args = message.content.slice(config.prefix.length).trim().split(/ +/);
+  const commandName = args.shift().toLowerCase();
+
+  // ... komutlar
 });
 
-client.login(BOT_TOKEN);
+client.login(config.token);
