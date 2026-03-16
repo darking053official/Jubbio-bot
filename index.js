@@ -13,7 +13,6 @@ const client = new Client({
 
 client.commands = new Collection();
 client.queue = new Map();
-client.djRoles = new Map();
 
 // Komutları yükle
 const commandsPath = path.join(__dirname, 'commands');
@@ -50,5 +49,5 @@ client.on('messageCreate', async (message) => {
   }
 });
 
-const BOT_TOKEN = 'c8cdb437d9bff10e41c5cebd4600473ced13285936de75ec6ab4397c50613cc0';
+const BOT_TOKEN = '9ad08124af59f0853aeda02a62ac722c26c43d7578e0981d8927d3b9e26ad900';
 client.login(BOT_TOKEN);
