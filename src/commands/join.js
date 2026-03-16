@@ -6,17 +6,18 @@ module.exports = {
   aliases: ['gel', 'katil'],
   
   async execute(message, args, client) {
-    // Kullanıcının ses kanalını kontrol et
-    const voiceChannel = message.member?.voice?.channel;
-    
-    console.log('Kullanıcı:', message.author.username);
-    console.log('Ses kanalı:', voiceChannel?.name || 'YOK');
-    
-    if (!voiceChannel) {
-      return message.reply('❌ **Ses kanalında değilsin!**');
-    }
-
     try {
+      // ÜYEYİ FETCH ET (cache sorununu çözer)
+      const member = await message.guild.members.fetch(message.author.id);
+      const voiceChannel = member.voice?.channel;
+      
+      console.log('👤 Kullanıcı:', member.user.username);
+      console.log('🔊 Ses kanalı:', voiceChannel?.name || 'YOK');
+      
+      if (!voiceChannel) {
+        return message.reply('❌ **Ses kanalında değilsin!**');
+      }
+
       const connection = joinVoiceChannel({
         channelId: voiceChannel.id,
         guildId: message.guild.id,
@@ -30,10 +31,9 @@ module.exports = {
       });
 
       await message.reply(`✅ **${voiceChannel.name}** kanalına katıldım!`);
-      console.log(`✅ ${voiceChannel.name} kanalına katıldım`);
       
     } catch (error) {
-      console.error('Join hatası:', error);
+      console.error('❌ Join hatası:', error);
       await message.reply(`❌ **Hata:** ${error.message}`);
     }
   }
