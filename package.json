@@ -9,8 +9,5 @@
   "dependencies": {
     "@jubbio/core": "1.1.18",
     "@jubbio/voice": "1.0.9"
-  },
-  "engines": {
-    "node": "16.x"
   }
 }
