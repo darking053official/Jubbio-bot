@@ -14,16 +14,44 @@ const client = new Client({
 client.commands = new Collection();
 client.queue = new Map();
 
-// Komutları yükle
+// Komutları src/commands klasöründen yükle
 const commandsPath = path.join(__dirname, 'src', 'commands');
-const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
+console.log(`📁 Komutlar yükleniyor: ${commandsPath}`);
 
-for (const file of commandFiles) {
-  const command = require(path.join(commandsPath, file));
-  if (command.name) {
-    client.commands.set(command.name, command);
-    console.log(`✅ Yüklendi: ${command.name}`);
+try {
+  if (!fs.existsSync(commandsPath)) {
+    console.error('❌ src/commands klasörü bulunamadı!');
+    process.exit(1);
   }
+
+  const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
+  
+  if (commandFiles.length === 0) {
+    console.error('❌ src/commands klasöründe .js dosyası bulunamadı!');
+    process.exit(1);
+  }
+
+  for (const file of commandFiles) {
+    const filePath = path.join(commandsPath, file);
+    try {
+      const command = require(filePath);
+      
+      if (command.name) {
+        client.commands.set(command.name, command);
+        console.log(`✅ Yüklendi: ${command.name}`);
+      } else {
+        console.log(`⚠️ ${file} geçersiz komut formatı`);
+      }
+    } catch (err) {
+      console.error(`❌ ${file} yüklenirken hata:`, err.message);
+    }
+  }
+  
+  console.log(`📊 Toplam ${client.commands.size} komut yüklendi`);
+  
+} catch (error) {
+  console.error('❌ Komutlar yüklenirken hata:', error.message);
+  process.exit(1);
 }
 
 client.on('ready', () => {
@@ -44,10 +72,20 @@ client.on('messageCreate', async (message) => {
   try {
     await command.execute(message, args, client);
   } catch (error) {
-    console.error(error);
+    console.error(`❌ ${commandName} hatası:`, error);
     message.reply('❌ **Hata oluştu!**');
   }
 });
 
+// YENİ TOKEN BURADA
 const BOT_TOKEN = '9ad08124af59f0853aeda02a62ac722c26c43d7578e0981d8927d3b9e26ad900';
-client.login(BOT_TOKEN);
+
+if (!BOT_TOKEN) {
+  console.error('❌ Token bulunamadı!');
+  process.exit(1);
+}
+
+client.login(BOT_TOKEN).catch(err => {
+  console.error('❌ Bot başlatılamadı:', err.message);
+  process.exit(1);
+});
