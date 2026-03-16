@@ -7,17 +7,28 @@ module.exports = {
   
   async execute(message, args, client) {
     try {
-      // ÜYEYİ FETCH ET (cache sorununu çözer)
-      const member = await message.guild.members.fetch(message.author.id);
-      const voiceChannel = member.voice?.channel;
-      
-      console.log('👤 Kullanıcı:', member.user.username);
-      console.log('🔊 Ses kanalı:', voiceChannel?.name || 'YOK');
-      
-      if (!voiceChannel) {
-        return message.reply('❌ **Ses kanalında değilsin!**');
+      // SUNUCU KONTROLÜ
+      if (!message.guild) {
+        return message.reply('❌ **Bu komut sadece sunucularda kullanılabilir!**');
       }
 
+      // KULLANICI KONTROLÜ
+      if (!message.member) {
+        return message.reply('❌ **Üye bilgisi alınamadı!**');
+      }
+
+      // VOICE KANAL KONTROLÜ (direkt)
+      const voiceChannel = message.member.voice?.channel;
+      
+      console.log('👤 Kullanıcı:', message.author?.username || 'Bilinmiyor');
+      console.log('🔊 Ses kanalı:', voiceChannel?.name || 'YOK');
+      console.log('🌍 Sunucu:', message.guild?.name || 'YOK');
+      
+      if (!voiceChannel) {
+        return message.reply('❌ **Önce bir ses kanalına girmelisin!**');
+      }
+
+      // BAĞLANTI
       const connection = joinVoiceChannel({
         channelId: voiceChannel.id,
         guildId: message.guild.id,
@@ -31,10 +42,11 @@ module.exports = {
       });
 
       await message.reply(`✅ **${voiceChannel.name}** kanalına katıldım!`);
+      console.log(`✅ Başarılı: ${voiceChannel.name}`);
       
     } catch (error) {
       console.error('❌ Join hatası:', error);
-      await message.reply(`❌ **Hata:** ${error.message}`);
+      await message.reply(`❌ **Hata:** ${error.message || 'Bilinmeyen hata'}`);
     }
   }
 };
