@@ -1,7 +1,6 @@
 {
-  "name": "jubbio-muzik-botu",
-  "version": "3.0.0",
-  "description": "Jubbio için müzik botu",
+  "name": "jubbio-bot",
+  "version": "1.0.0",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
@@ -9,8 +8,5 @@
   "dependencies": {
     "@jubbio/core": "^1.1.18",
     "@jubbio/voice": "^1.0.9"
-  },
-  "engines": {
-    "node": "16.x"
   }
 }
