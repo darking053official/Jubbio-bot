@@ -1,16 +1,19 @@
 module.exports = {
   name: 'resume',
-  description: 'Müziği devam ettirir',
-  aliases: ['devam'],
+  description: 'Duraklatılmış müziği devam ettirir',
+  cooldown: 2,
   
-  async execute(message, args, client) {
-    const serverQueue = client.queue.get(message.guild.id);
+  async execute(interaction, client) {
+    const serverQueue = client.queue.get(interaction.guild.id);
     
-    if (!serverQueue || !serverQueue.songs.length) {
-      return message.reply('❌ **Çalan müzik yok!**');
+    if (!serverQueue || !serverQueue.player) {
+      return interaction.reply({ 
+        content: '❌ **Çalan müzik yok!**', 
+        ephemeral: true 
+      });
     }
 
-    serverQueue.player?.unpause();
-    await message.reply('▶️ **Devam ediyor!**');
+    serverQueue.player.unpause();
+    await interaction.reply('▶️ **Müzik devam ediyor!**');
   }
 };
