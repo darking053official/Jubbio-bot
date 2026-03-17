@@ -1,75 +1,95 @@
-const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require('@jubbio/voice');
+const { createAudioPlayer, createAudioResource, AudioPlayerStatus } = require('@jubbio/voice');
 
 module.exports = {
   name: 'play',
-  description: 'Müzik çalar',
-  aliases: ['p', 'cal'],
+  description: 'Müzik çalar veya kuyruğa ekler',
+  cooldown: 3,
+  options: [
+    {
+      name: 'url',
+      description: 'YouTube video URL\'si',
+      type: 3,
+      required: true
+    }
+  ],
   
-  async execute(message, args, client) {
-    const voiceChannel = message.member?.voice?.channel;
-    if (!voiceChannel) {
-      return message.reply('❌ **Ses kanalına gir!**');
-    }
+  async execute(interaction, client) {
+    const url = interaction.options.getString('url');
+    const serverQueue = client.queue.get(interaction.guild.id);
 
-    const url = args[0];
-    if (!url) {
-      return message.reply('❌ **YouTube URL\'si ver!**');
-    }
-
-    let serverQueue = client.queue.get(message.guild.id);
-
-    if (!serverQueue) {
-      const connection = joinVoiceChannel({
-        channelId: voiceChannel.id,
-        guildId: message.guild.id,
-        adapterCreator: message.guild.voiceAdapterCreator
+    // URL kontrolü
+    if (!url.includes('youtu.be/') && !url.includes('youtube.com/')) {
+      return interaction.reply({ 
+        content: '❌ **Geçersiz YouTube URL\'si!**', 
+        ephemeral: true 
       });
-
-      const queueConstruct = {
-        textChannel: message.channel,
-        voiceChannel: voiceChannel,
-        connection: connection,
-        songs: [],
-        player: createAudioPlayer()
-      };
-
-      connection.subscribe(queueConstruct.player);
-      client.queue.set(message.guild.id, queueConstruct);
-      serverQueue = queueConstruct;
     }
 
+    // Bot kanalda mı?
+    if (!serverQueue || !serverQueue.connection) {
+      return interaction.reply({ 
+        content: '❌ **Önce /join yazıp beni kanala çağır!**', 
+        ephemeral: true 
+      });
+    }
+
+    // Player yoksa oluştur
+    if (!serverQueue.player) {
+      serverQueue.player = createAudioPlayer();
+      serverQueue.connection.subscribe(serverQueue.player);
+    }
+
+    // Kuyruğa ekle
+    if (!serverQueue.songs) serverQueue.songs = [];
     serverQueue.songs.push(url);
 
+    // Şarkı başlat
     if (serverQueue.songs.length === 1) {
-      playSong(message.guild.id, client);
-      await message.reply(`▶️ **Çalıyor:** ${url}`);
+      await interaction.reply(`⏳ **Müzik yükleniyor...**`);
+      await playSong(interaction.guild.id, client);
     } else {
-      await message.reply(`📋 **Kuyruğa eklendi!** (Sıra: ${serverQueue.songs.length})`);
+      await interaction.reply(`📋 **Şarkı kuyruğa eklendi!**\n📊 **Sıradaki şarkı sayısı:** ${serverQueue.songs.length}`);
     }
   }
 };
 
 async function playSong(guildId, client) {
   const serverQueue = client.queue.get(guildId);
-  
-  if (!serverQueue || !serverQueue.songs.length) {
-    if (serverQueue?.connection) serverQueue.connection.destroy();
-    client.queue.delete(guildId);
-    return;
-  }
+  if (!serverQueue || !serverQueue.songs || !serverQueue.songs.length) return;
 
   try {
     const resource = createAudioResource(serverQueue.songs[0]);
     serverQueue.player.play(resource);
 
+    // Şarkı bittiğinde
+    serverQueue.player.removeAllListeners(AudioPlayerStatus.Idle);
     serverQueue.player.once(AudioPlayerStatus.Idle, () => {
+      if (serverQueue.loop) {
+        // Tek şarkıyı döngüye al
+        playSong(guildId, client);
+      } else if (serverQueue.loopQueue) {
+        // Tüm kuyruğu döngüye al
+        const firstSong = serverQueue.songs.shift();
+        serverQueue.songs.push(firstSong);
+        playSong(guildId, client);
+      } else {
+        // Normal sıradaki şarkıya geç
+        serverQueue.songs.shift();
+        playSong(guildId, client);
+      }
+    });
+
+    // Hata durumunda
+    serverQueue.player.removeAllListeners('error');
+    serverQueue.player.once('error', (error) => {
+      console.error('Player hatası:', error);
       serverQueue.songs.shift();
       playSong(guildId, client);
     });
 
   } catch (error) {
-    console.error(error);
+    console.error('Şarkı çalma hatası:', error);
     serverQueue.songs.shift();
     playSong(guildId, client);
   }
-                           }
+      }
