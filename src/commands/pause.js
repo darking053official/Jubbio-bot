@@ -1,16 +1,19 @@
 module.exports = {
   name: 'pause',
-  description: 'Müziği duraklatır',
-  aliases: ['durdur'],
+  description: 'Çalan müziği duraklatır',
+  cooldown: 2,
   
-  async execute(message, args, client) {
-    const serverQueue = client.queue.get(message.guild.id);
+  async execute(interaction, client) {
+    const serverQueue = client.queue.get(interaction.guild.id);
     
-    if (!serverQueue || !serverQueue.songs.length) {
-      return message.reply('❌ **Çalan müzik yok!**');
+    if (!serverQueue || !serverQueue.player) {
+      return interaction.reply({ 
+        content: '❌ **Çalan müzik yok!**', 
+        ephemeral: true 
+      });
     }
 
-    serverQueue.player?.pause();
-    await message.reply('⏸️ **Duraklatıldı!**');
+    serverQueue.player.pause();
+    await interaction.reply('⏸️ **Müzik duraklatıldı!** /resume ile devam edebilirsin.');
   }
 };
