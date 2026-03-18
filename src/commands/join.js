@@ -1,4 +1,5 @@
-const { joinVoiceChannel, getVoiceConnection } = require('@jubbio/voice');
+const { joinVoiceChannel } = require('@jubbio/voice');
+const { Room, AudioTrack } = require('livekit-client');
 
 module.exports = {
   name: 'join',
@@ -6,65 +7,56 @@ module.exports = {
   cooldown: 2,
   
   async execute(interaction, client) {
-    await interaction.deferReply({ ephemeral: true }); // Uzun sürecek, beklet
+    await interaction.deferReply();
+    
     try {
-      // ===== 1. SUNUCU KONTROLÜ =====
+      console.log('🔊 JOIN KOMUTU ÇALIŞTI');
+      
       if (!interaction.guild) {
         return interaction.editReply('❌ Bu komut sadece sunucularda kullanılabilir.');
       }
 
-      // ===== 2. API ÜZERİNDEN ÜYE BİLGİSİNİ ÇEK (EN GARANTİLİ) =====
-      // Dökümandaki /bot/guilds/{guild_id}/members/{user_id} endpoint'ini kullanıyoruz.
+      // ===== 1. ÜYEYİ API'DEN ÇEK =====
       const memberResponse = await fetch(
         `https://gateway.jubbio.com/api/v1/bot/guilds/${interaction.guild.id}/members/${interaction.user.id}`,
-        {
-          headers: {
-            'Authorization': `Bot ${client.token}`,
-          },
-        }
+        { headers: { 'Authorization': `Bot ${client.token}` } }
       );
 
       if (!memberResponse.ok) {
-        console.error(`API Hatası (Üye Bilgisi): ${memberResponse.status}`);
-        return interaction.editReply('❌ Üye bilgilerin alınamadı. Botun yetkilerini kontrol et.');
+        return interaction.editReply('❌ Üye bilgileri alınamadı.');
       }
 
       const memberData = await memberResponse.json();
-      const voiceChannelId = memberData.voice?.channel_id; // API'den gelen voice bilgisi
-
-      console.log(`🔊 API'den gelen ses kanal ID: ${voiceChannelId || 'YOK'}`);
+      const voiceChannelId = memberData.voice?.channel_id;
 
       if (!voiceChannelId) {
-        return interaction.editReply('❌ **Önce bir ses kanalına girmelisin!** (Bot seni göremiyor)');
+        return interaction.editReply('❌ Önce bir ses kanalına girmelisin!');
       }
 
-      // Kanal objesini al (ID'den)
-      const voiceChannel = interaction.guild.channels.cache.get(voiceChannelId);
-      if (!voiceChannel) {
-        return interaction.editReply('❌ Ses kanalı bulunamadı.');
-      }
-
-      // ===== 3. BOT YETKİLERİNİ KONTROL ET =====
-      const botMember = await interaction.guild.members.fetchMe();
-      const permissions = voiceChannel.permissionsFor(botMember);
-      if (!permissions.has('Connect') || !permissions.has('Speak')) {
-        return interaction.editReply('❌ Botun bu kanala bağlanma/konuşma izni yok.');
-      }
-
-      // ===== 4. ESKİ BAĞLANTIYI TEMİZLE =====
-      getVoiceConnection(interaction.guild.id)?.destroy();
-
-      // ===== 5. YENİ BAĞLANTI =====
-      joinVoiceChannel({
-        channelId: voiceChannel.id,
+      // ===== 2. OP 4 MESAJI GÖNDER (WebSocket üzerinden) =====
+      // Bu kısım Jubbio'nun WebSocket'ine direkt erişim gerektirir
+      // @jubbio/voice zaten bunu yapıyor olmalı
+      
+      const connection = joinVoiceChannel({
+        channelId: voiceChannelId,
         guildId: interaction.guild.id,
         adapterCreator: interaction.guild.voiceAdapterCreator,
       });
 
-      await interaction.editReply(`✅ **${voiceChannel.name}** kanalına katıldım!`);
+      // ===== 3. KUYRUK OLUŞTUR =====
+      if (!client.queue) client.queue = new Map();
+      client.queue.set(interaction.guild.id, {
+        connection: connection,
+        songs: [],
+        livekitRoom: null,
+        livekitToken: null
+      });
+
+      await interaction.editReply(`✅ Ses kanalına katıldım! LiveKit ile ses iletilecek.`);
+
     } catch (error) {
       console.error('❌ JOIN HATASI:', error);
-      await interaction.editReply('❌ **Bir hata oluştu.**');
+      await interaction.editReply(`❌ Hata: ${error.message}`);
     }
   }
 };
