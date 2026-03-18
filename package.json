@@ -8,7 +8,8 @@
   },
   "dependencies": {
     "@jubbio/core": "1.1.18",
-    "@jubbio/voice": "1.0.9"
+    "@jubbio/voice": "1.0.9",
+    "livekit-client": "^1.4.0"
   },
   "engines": {
     "node": "16.x"
