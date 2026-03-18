@@ -1,19 +1,37 @@
 {
   "name": "jubbio-muzik-botu",
   "version": "4.0.0",
-  "description": "Jubbio için full özellikli müzik botu",
+  "description": "Jubbio için full özellikli müzik botu - LiveKit destekli",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "dev": "node index.js"
   },
   "dependencies": {
     "@jubbio/core": "1.1.18",
     "@jubbio/voice": "1.0.9",
-    "livekit-client": "^1.4.0"
+    "livekit-client": "^1.4.0",
+    "node-fetch": "^2.6.7"
   },
   "engines": {
     "node": "16.x"
   },
   "author": "darking053official",
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/darking053official/Jubbio-bot.git"
+  },
+  "keywords": [
+    "jubbio",
+    "music-bot",
+    "discord-like",
+    "bot",
+    "müzik-botu",
+    "livekit"
+  ],
+  "bugs": {
+    "url": "https://github.com/darking053official/Jubbio-bot/issues"
+  },
+  "homepage": "https://github.com/darking053official/Jubbio-bot#readme"
 }
