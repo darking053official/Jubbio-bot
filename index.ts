@@ -10,6 +10,19 @@ import {
 } from '@jubbio/voice';
 import { registerCommands } from './commands';
 import { GuildQueue, QueueTrack } from './queue';
+import ffmpegStatic from 'ffmpeg-static';
+import { execSync } from 'child_process';
+
+// ffmpeg path'ini ayarla
+process.env.FFMPEG_PATH = ffmpegStatic ?? 'ffmpeg';
+
+// yt-dlp binary'sini indir (ilk çalıştırmada)
+try {
+  execSync('yt-dlp --version', { stdio: 'ignore' });
+} catch {
+  console.log('⬇️ yt-dlp indiriliyor...');
+  execSync('npx yt-dlp-wrap download', { stdio: 'inherit' });
+}
 
 const client = new Client({
   intents: [
@@ -277,3 +290,15 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 client.login(process.env.BOT_TOKEN);
+
+// Render free plan için keep-alive HTTP server
+import http from 'http';
+
+const PORT = process.env.PORT || 3000;
+
+http.createServer((req, res) => {
+  res.writeHead(200);
+  res.end('Bot çalışıyor!');
+}).listen(PORT, () => {
+  console.log(`🌐 HTTP server ayakta: ${PORT}`);
+});
