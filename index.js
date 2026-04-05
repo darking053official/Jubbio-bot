@@ -1,249 +1,279 @@
-const { Client, GatewayIntentBits, Collection } = require('@jubbio/core');
-const fs = require('fs');
-const path = require('path');
-
-// FETCH POLYFILL - Node.js eski versiyonları için
-try {
-  if (!globalThis.fetch) {
-    globalThis.fetch = require('node-fetch');
-    console.log('✅ fetch polyfill yüklendi');
-  }
-} catch (e) {
-  console.log('⚠️ node-fetch yüklü değil, fetch kullanılamayacak');
-  globalThis.fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
-}
+import { Client, GatewayIntentBits, EmbedBuilder, Colors } from '@jubbio/core';
+import {
+  joinVoiceChannel,
+  createAudioPlayer,
+  createAudioResourceFromUrl,
+  probeAudioInfo,
+  getVoiceConnection,
+  AudioPlayerStatus,
+  VoiceConnectionStatus,
+} from '@jubbio/voice';
+import { registerCommands } from './commands';
+import { GuildQueue, QueueTrack } from './queue';
 
 const client = new Client({
   intents: [
-    GatewayIntentBits.Guilds,              // Sunucu bilgileri için
-    GatewayIntentBits.GuildMessages,       // Mesajları okumak için
-    GatewayIntentBits.MessageContent,      // Mesaj içeriğini okumak için
-    GatewayIntentBits.GuildVoiceStates,    // SES İÇİN - ÇOK ÖNEMLİ!
-    GatewayIntentBits.GuildMembers         // Üye bilgileri için
-  ]
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.MessageContent,
+  ],
 });
 
-// Koleksiyonlar
-client.commands = new Collection();
-client.queue = new Map();        // Müzik kuyruğu
-client.cooldowns = new Collection(); // Spam koruması
+// Her sunucu için kuyruk
+const queues = new Map<string, GuildQueue>();
 
-// ===== API TOKEN =====
-const BOT_TOKEN = '9ad08124af59f0853aeda02a62ac722c26c43d7578e0981d8927d3b9e26ad900';
-const APP_ID = '552486601809203200'; // Application ID
-
-// ===== KOMUTLARI YÜKLE =====
-const commandsPath = path.join(__dirname, 'src', 'commands');
-console.log(`📁 Komutlar yükleniyor: ${commandsPath}`);
-
-try {
-  if (!fs.existsSync(commandsPath)) {
-    console.error('❌ src/commands klasörü bulunamadı!');
-    process.exit(1);
+function getQueue(guildId: string): GuildQueue {
+  if (!queues.has(guildId)) {
+    queues.set(guildId, new GuildQueue());
   }
-
-  const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
-  
-  if (commandFiles.length === 0) {
-    console.error('❌ src/commands klasöründe .js dosyası bulunamadı!');
-    process.exit(1);
-  }
-
-  for (const file of commandFiles) {
-    const filePath = path.join(commandsPath, file);
-    try {
-      const command = require(filePath);
-      
-      if (command.name) {
-        client.commands.set(command.name, command);
-        console.log(`✅ Yüklendi: ${command.name}`);
-      } else {
-        console.log(`⚠️ ${file} geçersiz komut formatı: 'name' eksik`);
-      }
-    } catch (err) {
-      console.error(`❌ ${file} yüklenirken hata:`, err.message);
-    }
-  }
-  
-  console.log(`📊 Toplam ${client.commands.size} komut başarıyla yüklendi`);
-} catch (error) {
-  console.error('❌ Komutlar yüklenirken kritik hata:', error.message);
-  process.exit(1);
+  return queues.get(guildId)!;
 }
 
-// ===== SLASH KOMUTLARINI REST API İLE KAYDET =====
-async function registerSlashCommands() {
-  try {
-    console.log('📡 REST API ile slash komutlar kaydediliyor...');
-    
-    const commands = [];
-    client.commands.forEach(cmd => {
-      commands.push({
-        name: cmd.name,
-        description: cmd.description || `${cmd.name} komutu`,
-        options: cmd.options || []
-      });
-    });
+async function playNext(guildId: string, interaction?: any) {
+  const queue = getQueue(guildId);
+  const track = queue.next();
 
-    // Dökümantasyondaki doğru endpoint
-    const url = `https://gateway.jubbio.com/api/v1/applications/${APP_ID}/commands`;
-    
-    console.log(`📝 ${commands.length} komut kaydediliyor...`);
-    
-    // PUT metodu ile toplu kayıt
-    const response = await fetch(url, {
-      method: 'PUT',
-      headers: {
-        'Authorization': `Bot ${BOT_TOKEN}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(commands)
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      console.log(`✅ ${data.length} slash komut başarıyla kaydedildi!`);
-      console.log(`📢 /yardim yazıp komutları görebilirsin`);
-    } else {
-      const text = await response.text();
-      console.log(`❌ REST API hatası (${response.status}):`, text);
-      
-      // POST ile tek tek dene
-      console.log('🔄 POST ile tek tek kayıt deneniyor...');
-      for (const cmd of commands) {
-        const postResponse = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bot ${BOT_TOKEN}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(cmd)
-        });
-        
-        if (postResponse.ok) {
-          console.log(`✅ /${cmd.name} kaydedildi`);
-        } else {
-          console.log(`❌ /${cmd.name} kaydedilemedi`);
+  if (!track) {
+    queue.playing = false;
+    const connection = getVoiceConnection(guildId);
+    if (connection) {
+      setTimeout(() => {
+        if (!queue.playing) {
+          connection.destroy();
+          queues.delete(guildId);
         }
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Rate limit
-      }
+      }, 30000); // 30 saniye sonra kanaldan ayrıl
     }
-  } catch (error) {
-    console.error('❌ REST API bağlantı hatası:', error.message);
+    return;
+  }
+
+  const player = queue.player!;
+  const resource = createAudioResourceFromUrl(track.url);
+  player.play(resource);
+  queue.playing = true;
+
+  player.once(AudioPlayerStatus.Idle, () => {
+    playNext(guildId);
+  });
+
+  // Şarkı bilgisini text channel'a gönder
+  if (queue.textChannelId && queue.textChannelSend) {
+    const embed = buildNowPlayingEmbed(track);
+    queue.textChannelSend(embed).catch(() => {});
   }
 }
 
-// ===== BOT HAZIR OLDUĞUNDA =====
-client.once('ready', () => {
-  console.log('=================================');
-  console.log('✅ MÜZİK BOTU ÇALIŞIYOR!');
-  console.log(`📢 Bot adı: ${client.user?.username}`);
-  console.log(`📢 Bot ID: ${client.user?.id}`);
-  console.log(`📢 Komut sayısı: ${client.commands.size}`);
-  console.log('=================================');
-  
-  // 3 saniye bekle, sonra komutları kaydet
-  setTimeout(registerSlashCommands, 3000);
+function buildNowPlayingEmbed(track: QueueTrack): any {
+  const minutes = Math.floor(track.duration / 60);
+  const seconds = track.duration % 60;
+  const durationStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+  const embed = new EmbedBuilder()
+    .setTitle('🎵 Şu an çalıyor')
+    .setDescription(`**${track.title}**`)
+    .setColor(Colors.Blue)
+    .addFields(
+      { name: '⏱ Süre', value: durationStr, inline: true },
+      { name: '👤 Ekleyen', value: track.requestedBy, inline: true }
+    )
+    .setTimestamp();
+
+  if (track.thumbnail) {
+    embed.setThumbnail(track.thumbnail);
+  }
+
+  return { embeds: [embed] };
+}
+
+client.on('ready', async () => {
+  console.log(`✅ ${client.user?.username} hazır!`);
+  await registerCommands(client);
 });
 
-// ===== GATEWAY BAĞLANTISI =====
-client.on('ready', () => {
-  console.log('🔌 Gateway bağlantısı kuruldu: wss://realtime.jubbio.com');
-});
-
-// ===== SLASH KOMUTLARINI DİNLE =====
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isCommand()) return;
-  
-  const command = client.commands.get(interaction.commandName);
-  if (!command) {
-    return interaction.reply({ 
-      content: '❌ **Komut bulunamadı!**', 
-      ephemeral: true 
-    });
-  }
-  
-  // ===== COOLDOWN KONTROLÜ =====
-  if (!client.cooldowns.has(command.name)) {
-    client.cooldowns.set(command.name, new Collection());
-  }
 
-  const now = Date.now();
-  const timestamps = client.cooldowns.get(command.name);
-  const cooldownAmount = (command.cooldown || 2) * 1000;
+  const guildId = interaction.guildId;
+  if (!guildId) return;
 
-  if (timestamps.has(interaction.user.id)) {
-    const expirationTime = timestamps.get(interaction.user.id) + cooldownAmount;
-    if (now < expirationTime) {
-      const timeLeft = (expirationTime - now) / 1000;
-      return interaction.reply({ 
-        content: `⏱️ **${timeLeft.toFixed(1)} saniye** beklemelisin!`, 
-        ephemeral: true 
+  // --- /play ---
+  if (interaction.commandName === 'play') {
+    const url = interaction.options.getString('url', true);
+    const voiceChannelId = interaction.member?.voice?.channelId;
+
+    if (!voiceChannelId) {
+      return interaction.reply({
+        content: '❌ Önce bir ses kanalına gir!',
+        ephemeral: true,
       });
     }
-  }
 
-  // ===== KOMUTU ÇALIŞTIR =====
-  try {
-    console.log(`🎵 Komut çalıştırıldı: /${command.name} - ${interaction.user.username}`);
-    await command.execute(interaction, client);
-    timestamps.set(interaction.user.id, now);
-    setTimeout(() => timestamps.delete(interaction.user.id), cooldownAmount);
-  } catch (error) {
-    console.error(`❌ /${command.name} hatası:`, error);
-    
-    const errorMsg = { 
-      content: '❌ **Komut çalıştırılırken hata oluştu!**', 
-      ephemeral: true 
-    };
-    
-    if (interaction.replied || interaction.deferred) {
-      await interaction.followUp(errorMsg).catch(() => {});
-    } else {
-      await interaction.reply(errorMsg).catch(() => {});
+    await interaction.deferReply();
+
+    try {
+      const info = await probeAudioInfo(url);
+      const queue = getQueue(guildId);
+
+      // Ses bağlantısı
+      let connection = getVoiceConnection(guildId);
+      if (!connection) {
+        connection = joinVoiceChannel({
+          channelId: voiceChannelId,
+          guildId,
+          adapterCreator: client.voice.adapters.get(guildId),
+        });
+
+        connection.on(VoiceConnectionStatus.Disconnected, () => {
+          queues.delete(guildId);
+        });
+
+        const player = createAudioPlayer();
+        queue.player = player;
+        connection.subscribe(player);
+      }
+
+      if (!queue.player) {
+        const player = createAudioPlayer();
+        queue.player = player;
+        connection!.subscribe(player);
+      }
+
+      const track: QueueTrack = {
+        title: info.title,
+        url: info.url,
+        duration: info.duration,
+        thumbnail: info.thumbnail,
+        requestedBy: interaction.member?.user?.username ?? 'Bilinmiyor',
+      };
+
+      // Text channel kaydet (kuyruğa ekleme bildirimi için)
+      queue.textChannelId = interaction.channelId;
+      queue.textChannelSend = (payload: any) =>
+        interaction.channel?.send(payload);
+
+      if (!queue.playing) {
+        queue.tracks.push(track);
+        await playNext(guildId);
+
+        const minutes = Math.floor(info.duration / 60);
+        const seconds = info.duration % 60;
+        const durationStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+        const embed = new EmbedBuilder()
+          .setTitle('🎵 Şu an çalıyor')
+          .setDescription(`**${info.title}**`)
+          .setColor(Colors.Green)
+          .addFields(
+            { name: '⏱ Süre', value: durationStr, inline: true },
+            { name: '👤 Ekleyen', value: track.requestedBy, inline: true }
+          )
+          .setTimestamp();
+
+        if (info.thumbnail) embed.setThumbnail(info.thumbnail);
+
+        await interaction.editReply({ embeds: [embed] });
+      } else {
+        queue.tracks.push(track);
+
+        const embed = new EmbedBuilder()
+          .setTitle('📋 Kuyruğa Eklendi')
+          .setDescription(`**${info.title}**`)
+          .setColor(Colors.Yellow)
+          .addFields({ name: '📍 Sıra', value: `${queue.tracks.length}. sırada`, inline: true })
+          .setTimestamp();
+
+        if (info.thumbnail) embed.setThumbnail(info.thumbnail);
+
+        await interaction.editReply({ embeds: [embed] });
+      }
+    } catch (error: any) {
+      await interaction.editReply(`❌ Hata: ${error.message}`);
     }
   }
-});
 
-// ===== MESAJ KOMUTLARI (OPSİYONEL) =====
-client.on('messageCreate', async (message) => {
-  if (message.author.bot) return;
-  if (!message.content.startsWith('!')) return;
+  // --- /skip ---
+  else if (interaction.commandName === 'skip') {
+    const queue = getQueue(guildId);
+    if (!queue.playing) {
+      return interaction.reply({ content: '❌ Şu an bir şey çalmıyor.', ephemeral: true });
+    }
 
-  const args = message.content.slice(1).trim().split(/ +/);
-  const commandName = args.shift().toLowerCase();
+    queue.player?.stop();
+    await interaction.reply('⏭ Atlandı!');
+  }
 
-  // Sadece belirli prefix komutları çalışsın
-  if (commandName === 'ping') {
-    await message.reply('🏓 Pong!');
+  // --- /stop ---
+  else if (interaction.commandName === 'stop') {
+    const queue = getQueue(guildId);
+    queue.tracks = [];
+    queue.currentIndex = 0;
+    queue.playing = false;
+    queue.player?.stop();
+
+    const connection = getVoiceConnection(guildId);
+    connection?.destroy();
+    queues.delete(guildId);
+
+    await interaction.reply('⏹ Müzik durduruldu ve kanaldan ayrıldım.');
+  }
+
+  // --- /pause ---
+  else if (interaction.commandName === 'pause') {
+    const queue = getQueue(guildId);
+    if (!queue.playing) {
+      return interaction.reply({ content: '❌ Şu an bir şey çalmıyor.', ephemeral: true });
+    }
+    queue.player?.pause();
+    await interaction.reply('⏸ Duraklatıldı.');
+  }
+
+  // --- /resume ---
+  else if (interaction.commandName === 'resume') {
+    const queue = getQueue(guildId);
+    queue.player?.unpause();
+    await interaction.reply('▶️ Devam ediyor.');
+  }
+
+  // --- /queue ---
+  else if (interaction.commandName === 'queue') {
+    const queue = getQueue(guildId);
+    if (queue.tracks.length === 0) {
+      return interaction.reply({ content: '📋 Kuyruk boş.', ephemeral: true });
+    }
+
+    const trackList = queue.tracks
+      .map((t, i) => {
+        const mins = Math.floor(t.duration / 60);
+        const secs = t.duration % 60;
+        const dur = `${mins}:${secs.toString().padStart(2, '0')}`;
+        const arrow = i === queue.currentIndex ? '▶️ ' : `${i + 1}. `;
+        return `${arrow}**${t.title}** \`${dur}\` - ${t.requestedBy}`;
+      })
+      .slice(0, 10)
+      .join('\n');
+
+    const embed = new EmbedBuilder()
+      .setTitle('📋 Müzik Kuyruğu')
+      .setDescription(trackList)
+      .setColor(Colors.Purple)
+      .setFooter({ text: `Toplam ${queue.tracks.length} şarkı` })
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  // --- /nowplaying ---
+  else if (interaction.commandName === 'nowplaying') {
+    const queue = getQueue(guildId);
+    const current = queue.current();
+
+    if (!current) {
+      return interaction.reply({ content: '❌ Şu an bir şey çalmıyor.', ephemeral: true });
+    }
+
+    await interaction.reply(buildNowPlayingEmbed(current));
   }
 });
 
-// ===== BOTU BAŞLAT =====
-if (!BOT_TOKEN) {
-  console.error('❌ Token bulunamadı!');
-  process.exit(1);
-}
-
-client.login(BOT_TOKEN).catch(err => {
-  console.error('❌ Bot başlatılamadı:', err.message);
-  process.exit(1);
-});
-
-// ===== HATA YAKALAMA =====
-process.on('uncaughtException', (error) => {
-  console.error('❌ Beklenmeyen hata:', error);
-});
-
-process.on('unhandledRejection', (error) => {
-  console.error('❌ Promise hatası:', error);
-});
-
-process.on('SIGINT', () => {
-  console.log('\n👋 Bot kapatılıyor...');
-  client.queue?.forEach((queue) => {
-    if (queue.connection) queue.connection.destroy();
-  });
-  client.destroy();
-  process.exit(0);
-});
+client.login(process.env.BOT_TOKEN);
